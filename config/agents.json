@@ -1,0 +1,60 @@
+{
+  "personalities": [
+    {
+      "type": "reliable_saver",
+      "description": "Consistent contributor, rarely misses payments. Has stable income and strong savings discipline. Trusts the group.",
+      "reliability": 0.95,
+      "risk_tolerance": 0.2,
+      "income_stability": 0.9,
+      "yield_sensitivity": 0.3,
+      "social_pressure_sensitivity": 0.7,
+      "weight": 0.25
+    },
+    {
+      "type": "optimistic_newcomer",
+      "description": "First time in a savings circle. Excited but may lose motivation after a few months if they don't see their payout soon.",
+      "reliability": 0.7,
+      "risk_tolerance": 0.5,
+      "income_stability": 0.6,
+      "yield_sensitivity": 0.8,
+      "social_pressure_sensitivity": 0.5,
+      "weight": 0.2
+    },
+    {
+      "type": "financially_stressed",
+      "description": "Wants to save but lives paycheck to paycheck. High dropout risk when unexpected expenses hit. Yield income could be the difference.",
+      "reliability": 0.5,
+      "risk_tolerance": 0.3,
+      "income_stability": 0.3,
+      "yield_sensitivity": 0.95,
+      "social_pressure_sensitivity": 0.8,
+      "weight": 0.25
+    },
+    {
+      "type": "skeptical_veteran",
+      "description": "Has been burned before by circles that collapsed. Needs proof the system works. Will stay if they see others contributing consistently.",
+      "reliability": 0.6,
+      "risk_tolerance": 0.1,
+      "income_stability": 0.7,
+      "yield_sensitivity": 0.6,
+      "social_pressure_sensitivity": 0.9,
+      "weight": 0.15
+    },
+    {
+      "type": "opportunistic_freerider",
+      "description": "Joins hoping to get an early payout then bounce. Low commitment, high self-interest. The one who ruins circles.",
+      "reliability": 0.3,
+      "risk_tolerance": 0.8,
+      "income_stability": 0.5,
+      "yield_sensitivity": 0.4,
+      "social_pressure_sensitivity": 0.2,
+      "weight": 0.15
+    }
+  ],
+  "name_pool": [
+    "Ana", "Bruno", "Carlos", "Diana", "Eduardo",
+    "Fernanda", "Gabriel", "Helena", "Igor", "Julia",
+    "Lucas", "Maria", "Nicolas", "Patricia", "Rafael",
+    "Sofia", "Thiago", "Valentina", "Wesley", "Yasmin"
+  ]
+}

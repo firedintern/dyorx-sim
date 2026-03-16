@@ -1,0 +1,42 @@
+{
+  "scenarios": {
+    "traditional": {
+      "name": "Traditional Savings Circle",
+      "description": "Classic consorcio/ROSCA with no yield. Monthly contributions, round-robin payouts.",
+      "apy": 0.0,
+      "monthly_contribution_usd": 100,
+      "num_agents": 12,
+      "num_rounds": 12,
+      "payout_method": "round_robin",
+      "currency": "BRL",
+      "usd_to_brl": 5.2
+    },
+    "dyorx": {
+      "name": "DYORX Circle (Solana DeFi Yield)",
+      "description": "DYORX-powered circle where idle pooled funds earn yield via Kamino/MarginFi on Solana. Yield distributed proportionally to active members.",
+      "apy": 0.07,
+      "monthly_contribution_usd": 100,
+      "num_agents": 12,
+      "num_rounds": 12,
+      "payout_method": "round_robin",
+      "currency": "BRL",
+      "usd_to_brl": 5.2,
+      "yield_source": "Kamino USDC vault on Solana",
+      "yield_distribution": "proportional_to_balance"
+    }
+  },
+  "simulation": {
+    "runs_per_scenario": 3,
+    "random_events": true,
+    "random_event_probability": 0.15,
+    "random_events_pool": [
+      "unexpected_medical_expense",
+      "job_loss",
+      "car_repair",
+      "family_emergency",
+      "bonus_income",
+      "rent_increase",
+      "holiday_spending_pressure"
+    ]
+  }
+}

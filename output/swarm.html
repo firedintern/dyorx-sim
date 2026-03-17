@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DYORX Agent Swarm — Live Replay</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #050810; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow-x: hidden; }
+
+/* ── HEADER ── */
+header { background: linear-gradient(135deg,#0a0f1e,#0d1830); border-bottom:1px solid #1a2744; padding:16px 32px; display:flex; align-items:center; justify-content:space-between; }
+.logo { font-size:1rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:#60a5fa; }
+.header-right { display:flex; align-items:center; gap:12px; }
+.badge { background:#0c1f3f; border:1px solid #1e3a5f; border-radius:16px; padding:3px 12px; font-size:0.72rem; font-weight:600; color:#60a5fa; }
+
+/* ── LAYOUT ── */
+.shell { display:grid; grid-template-columns:280px 1fr 300px; height:calc(100vh - 57px); }
+
+/* ── LEFT PANEL ── */
+.left-panel { background:#08111f; border-right:1px solid #111f35; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+.panel-title { font-size:0.65rem; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:#1e3a5f; margin-bottom:4px; }
+
+.scenario-btn { width:100%; background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:10px 12px; cursor:pointer; text-align:left; transition:all 0.15s; }
+.scenario-btn:hover { border-color:#3b82f6; background:#0c1f3f; }
+.scenario-btn.active { border-color:#3b82f6; background:#0c1f3f; }
+.scenario-btn .sb-label { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px; }
+.scenario-btn.trad .sb-label { color:#64748b; }
+.scenario-btn.dyorx .sb-label { color:#60a5fa; }
+.scenario-btn .sb-name { font-size:0.82rem; font-weight:600; color:#cbd5e1; }
+.scenario-btn .sb-sub { font-size:0.7rem; color:#334155; margin-top:2px; }
+
+.controls { background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:12px; }
+.controls label { font-size:0.68rem; color:#334155; text-transform:uppercase; letter-spacing:0.08em; display:block; margin-bottom:6px; }
+.speed-row { display:flex; gap:6px; }
+.speed-btn { flex:1; background:#0a0f1e; border:1px solid #1a2744; border-radius:6px; padding:5px 0; font-size:0.7rem; font-weight:700; color:#334155; cursor:pointer; text-align:center; transition:all 0.1s; }
+.speed-btn.active { background:#0c1f3f; border-color:#3b82f6; color:#60a5fa; }
+.round-slider { width:100%; margin-top:8px; accent-color:#3b82f6; cursor:pointer; }
+
+.playbar { display:flex; gap:8px; margin-top:8px; }
+.play-btn { flex:1; background:#0c1f3f; border:1px solid #1e3a5f; border-radius:6px; padding:7px; font-size:0.78rem; font-weight:700; color:#60a5fa; cursor:pointer; text-align:center; transition:all 0.1s; }
+.play-btn:hover { background:#1e3a5f; }
+.play-btn.active { background:#1e3a5f; }
+
+.round-display { background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:12px; text-align:center; }
+.round-num { font-size:2.4rem; font-weight:800; color:#60a5fa; line-height:1; }
+.round-label { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.1em; color:#1e3a5f; margin-top:4px; }
+
+.pool-display { background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:12px; }
+.pool-val { font-size:1.4rem; font-weight:800; color:#10b981; }
+.pool-yield { font-size:0.75rem; color:#f59e0b; margin-top:2px; }
+
+.legend { display:flex; flex-direction:column; gap:5px; }
+.leg-row { display:flex; align-items:center; gap:8px; font-size:0.72rem; color:#334155; }
+.leg-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+/* ── CANVAS AREA ── */
+.canvas-area { position:relative; background:#050810; overflow:hidden; }
+canvas#swarm { width:100%; height:100%; display:block; }
+.canvas-overlay { position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; }
+.round-banner { background:rgba(5,8,16,0.85); border:1px solid #1a2744; border-radius:8px; padding:8px 14px; backdrop-filter:blur(8px); }
+.round-banner .rb-round { font-size:1.1rem; font-weight:800; color:#60a5fa; }
+.round-banner .rb-sub { font-size:0.7rem; color:#334155; }
+.payout-flash { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; opacity:0; transition:opacity 0.3s; text-align:center; }
+.payout-flash.show { opacity:1; }
+.payout-flash .pf-amt { font-size:2.4rem; font-weight:800; color:#10b981; text-shadow:0 0 30px rgba(16,185,129,0.5); }
+.payout-flash .pf-name { font-size:1rem; color:#94a3b8; margin-top:4px; }
+
+/* ── RIGHT PANEL ── */
+.right-panel { background:#08111f; border-left:1px solid #111f35; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+
+.agent-list { display:flex; flex-direction:column; gap:6px; }
+.agent-card { background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:10px 12px; cursor:pointer; transition:all 0.15s; }
+.agent-card:hover { border-color:#3b82f6; }
+.agent-card.selected { border-color:#3b82f6; background:#0c1f3f; }
+.agent-card.dropped { opacity:0.45; border-style:dashed; }
+.ac-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.ac-name { font-size:0.85rem; font-weight:700; color:#e2e8f0; }
+.ac-action { font-size:0.65rem; font-weight:700; text-transform:uppercase; padding:2px 7px; border-radius:8px; }
+.ac-action.contribute { background:#064e3b; color:#10b981; }
+.ac-action.skip { background:#451a03; color:#f59e0b; }
+.ac-action.dropout { background:#450a0a; color:#ef4444; }
+.ac-action.inactive { background:#111; color:#334155; }
+.ac-action.payout { background:#0c2d4e; color:#60a5fa; }
+.ac-type { font-size:0.68rem; color:#1e3a5f; margin-bottom:6px; }
+.ac-bars { display:flex; flex-direction:column; gap:3px; }
+.ac-bar-row { display:flex; align-items:center; gap:5px; font-size:0.62rem; color:#1e3a5f; }
+.ac-bar-track { flex:1; background:#0a0f1e; border-radius:2px; height:3px; }
+.ac-bar-fill { height:3px; border-radius:2px; transition:width 0.4s; }
+.ac-reasoning { font-size:0.7rem; color:#334155; margin-top:5px; font-style:italic; line-height:1.4; border-top:1px solid #111f35; padding-top:5px; }
+
+.event-log { background:#0f1624; border:1px solid #1a2744; border-radius:8px; padding:10px; max-height:180px; overflow-y:auto; }
+.event-entry { font-size:0.72rem; color:#334155; padding:3px 0; border-bottom:1px solid #0a0f1e; line-height:1.4; }
+.event-entry:last-child { border-bottom:none; }
+.event-entry .ee-round { color:#1e3a5f; font-weight:700; }
+.event-entry .ee-agent { font-weight:700; }
+.event-entry .ee-contribute { color:#10b981; }
+.event-entry .ee-skip { color:#f59e0b; }
+.event-entry .ee-dropout { color:#ef4444; }
+.event-entry .ee-event { color:#8b5cf6; }
+
+.stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.stat-box { background:#0f1624; border:1px solid #1a2744; border-radius:6px; padding:8px 10px; }
+.stat-val { font-size:1.1rem; font-weight:800; line-height:1; margin-bottom:2px; }
+.stat-label { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.07em; color:#1e3a5f; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">DYORX · Agent Swarm Replay</div>
+  <div class="header-right">
+    <span class="badge" id="agentCount">Loading...</span>
+    <span class="badge" id="scenarioBadge">—</span>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- LEFT: controls -->
+  <div class="left-panel">
+    <div>
+      <div class="panel-title">Scenario</div>
+      <div id="scenarioBtns" style="display:flex;flex-direction:column;gap:6px;"></div>
+    </div>
+
+    <div class="controls">
+      <label>Playback Speed</label>
+      <div class="speed-row">
+        <div class="speed-btn" data-speed="2000">0.5×</div>
+        <div class="speed-btn active" data-speed="1000">1×</div>
+        <div class="speed-btn" data-speed="500">2×</div>
+        <div class="speed-btn" data-speed="200">5×</div>
+      </div>
+      <div style="margin-top:10px;">
+        <label>Jump to Round</label>
+        <input type="range" class="round-slider" id="roundSlider" min="0" max="9" value="0">
+      </div>
+      <div class="playbar">
+        <div class="play-btn" id="playBtn">▶ Play</div>
+        <div class="play-btn" id="resetBtn">↺ Reset</div>
+      </div>
+    </div>
+
+    <div class="round-display">
+      <div class="round-num" id="roundNum">0</div>
+      <div class="round-label">Current Round</div>
+    </div>
+
+    <div class="pool-display">
+      <div class="panel-title">Pool Balance</div>
+      <div class="pool-val" id="poolVal">$0</div>
+      <div class="pool-yield" id="poolYield"></div>
+    </div>
+
+    <div>
+      <div class="panel-title">Legend</div>
+      <div class="legend">
+        <div class="leg-row"><div class="leg-dot" style="background:#10b981;box-shadow:0 0 6px #10b981;"></div>Contributed this round</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b;"></div>Skipped this round</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></div>Dropped out</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#60a5fa;box-shadow:0 0 8px #60a5fa;"></div>Receiving payout</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#8b5cf6;box-shadow:0 0 6px #8b5cf6;"></div>Life event this round</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#1e3a5f;"></div>Inactive (dropped out)</div>
+        <div class="leg-row"><div class="leg-dot" style="background:#ffffff20;border:1px solid #334155;"></div>Idle (no event)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTRE: canvas -->
+  <div class="canvas-area" id="canvasArea">
+    <canvas id="swarm"></canvas>
+    <div class="canvas-overlay">
+      <div class="round-banner">
+        <div class="rb-round" id="canvasRound">Round 0 / 10</div>
+        <div class="rb-sub" id="canvasSub">Select a circle to begin</div>
+      </div>
+      <div id="canvasStats" style="display:flex;gap:8px;"></div>
+    </div>
+    <div class="payout-flash" id="payoutFlash">
+      <div class="pf-amt" id="pfAmt"></div>
+      <div class="pf-name" id="pfName"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: agents -->
+  <div class="right-panel">
+    <div>
+      <div class="panel-title">Agents — click for detail</div>
+      <div class="agent-list" id="agentList"></div>
+    </div>
+    <div>
+      <div class="panel-title" style="margin-bottom:6px;">Live Event Log</div>
+      <div class="event-log" id="eventLog"></div>
+    </div>
+    <div>
+      <div class="panel-title" style="margin-bottom:6px;">Round Stats</div>
+      <div class="stats-grid" id="statsGrid"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+// DATA LOADING
+// ──────────────────────────────────────────────
+let swarmData = null;
+let currentScenario = null;
+let currentCircleIdx = 0;
+let currentRound = 0;
+let playing = false;
+let playTimer = null;
+let playSpeed = 1000;
+let selectedAgent = null;
+
+// Agent visual state
+let agentNodes = [];
+let canvasW = 0, canvasH = 0;
+
+const canvas = document.getElementById('swarm');
+const ctx = canvas.getContext('2d');
+
+const PERSONALITY_COLORS = {
+  reliable_saver: '#10b981',
+  group_leader: '#3b82f6',
+  frugal_planner: '#8b5cf6',
+  optimistic_newcomer: '#06b6d4',
+  skeptical_veteran: '#64748b',
+  financially_stressed: '#ec4899',
+  irregular_earner: '#f59e0b',
+  social_follower: '#22d3ee',
+  impatient_saver: '#fb923c',
+  opportunistic_freerider: '#ef4444',
+};
+
+async function loadData() {
+  try {
+    const resp = await fetch('swarm_data.json');
+    swarmData = await resp.json();
+    init();
+  } catch(e) {
+    document.getElementById('agentCount').textContent = 'swarm_data.json not found — run simulation first';
+  }
+}
+
+// ──────────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────────
+function init() {
+  buildScenarioButtons();
+  setupControls();
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+}
+
+function buildScenarioButtons() {
+  const container = document.getElementById('scenarioBtns');
+  container.innerHTML = '';
+  for (const [scenKey, runs] of Object.entries(swarmData)) {
+    runs.forEach((run, idx) => {
+      const btn = document.createElement('div');
+      btn.className = `scenario-btn ${scenKey === 'dyorx' ? 'dyorx' : 'trad'}`;
+      btn.dataset.scenario = scenKey;
+      btn.dataset.idx = idx;
+      btn.innerHTML = `
+        <div class="sb-label">${scenKey === 'dyorx' ? 'DYORX · 7% APY' : 'Traditional · 0% APY'}</div>
+        <div class="sb-name">Circle ${run.run_index}</div>
+        <div class="sb-sub">${run.composition_label}</div>`;
+      btn.addEventListener('click', () => selectCircle(scenKey, idx, btn));
+      container.appendChild(btn);
+    });
+  }
+}
+
+function selectCircle(scenKey, idx, btn) {
+  document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentScenario = scenKey;
+  currentCircleIdx = idx;
+  currentRound = 0;
+  stopPlay();
+  buildAgentNodes();
+  renderRound(0);
+  document.getElementById('agentCount').textContent =
+    `${swarmData[scenKey][idx].agents.length} agents · ${swarmData[scenKey][idx].num_rounds} rounds`;
+  document.getElementById('scenarioBadge').textContent =
+    scenKey === 'dyorx' ? 'DYORX 7% APY' : 'Traditional 0% APY';
+  const slider = document.getElementById('roundSlider');
+  slider.max = swarmData[scenKey][idx].num_rounds - 1;
+  slider.value = 0;
+}
+
+// ──────────────────────────────────────────────
+// CANVAS & NODES
+// ──────────────────────────────────────────────
+function resizeCanvas() {
+  const area = document.getElementById('canvasArea');
+  canvasW = area.clientWidth;
+  canvasH = area.clientHeight;
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  if (currentScenario) renderRound(currentRound);
+}
+
+function buildAgentNodes() {
+  const run = swarmData[currentScenario][currentCircleIdx];
+  const n = run.agents.length;
+  agentNodes = run.agents.map((agent, i) => {
+    // arrange in a circle, with slight random offset for organic feel
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = Math.min(canvasW, canvasH) * 0.32;
+    const cx = canvasW * 0.5 + r * Math.cos(angle) + (Math.random() - 0.5) * 20;
+    const cy = canvasH * 0.5 + r * Math.sin(angle) + (Math.random() - 0.5) * 20;
+    return {
+      ...agent,
+      x: cx, y: cy,
+      baseX: cx, baseY: cy,
+      vx: 0, vy: 0,
+      radius: 26,
+      color: PERSONALITY_COLORS[agent.personality] || '#64748b',
+      currentAction: null,
+      currentEvent: null,
+      glow: 0,
+    };
+  });
+}
+
+// ──────────────────────────────────────────────
+// RENDER
+// ──────────────────────────────────────────────
+function renderRound(roundIdx) {
+  if (!currentScenario) return;
+  const run = swarmData[currentScenario][currentCircleIdx];
+  const roundLog = run.circle ? run.round_log : run.round_log;
+  // handle both nesting styles
+  const circleData = run.round_log || (run.circle && run.circle.round_log) || [];
+  const roundData = circleData[roundIdx];
+
+  // Update agent state from their decision history
+  agentNodes.forEach((node, i) => {
+    const agent = run.agents[i];
+    const hist = agent.decision_history || [];
+    const thisRound = hist.find(h => h.round === roundIdx + 1);
+    node.currentAction = thisRound ? thisRound.action : (agent.dropout_round && agent.dropout_round <= roundIdx ? 'inactive' : null);
+    node.currentEvent = thisRound ? thisRound.event : null;
+    node.reasoning = thisRound ? thisRound.reasoning : '';
+  });
+
+  // Mark payout recipient
+  let payoutTo = roundData ? roundData.payout_to : null;
+  let payoutAmount = roundData ? roundData.payout_amount : 0;
+  agentNodes.forEach(node => {
+    node.isPayout = node.name === payoutTo && payoutAmount > 0;
+  });
+
+  draw(roundData, roundIdx, run);
+  updateUI(roundData, roundIdx, run);
+  document.getElementById('roundSlider').value = roundIdx;
+}
+
+function draw(roundData, roundIdx, run) {
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  // Background grid
+  ctx.strokeStyle = 'rgba(30,55,89,0.2)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvasW; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,canvasH); ctx.stroke(); }
+  for (let y = 0; y < canvasH; y += 60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvasW,y); ctx.stroke(); }
+
+  // Central pool orb
+  const cx = canvasW * 0.5, cy = canvasH * 0.5;
+  const poolBal = roundData ? roundData.pool_balance : 0;
+  const maxPool = 2000;
+  const poolR = 38 + Math.min(poolBal / maxPool, 1) * 22;
+
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, poolR * 1.8);
+  grad.addColorStop(0, 'rgba(59,130,246,0.25)');
+  grad.addColorStop(1, 'rgba(59,130,246,0)');
+  ctx.beginPath(); ctx.arc(cx, cy, poolR * 1.8, 0, Math.PI*2);
+  ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath(); ctx.arc(cx, cy, poolR, 0, Math.PI*2);
+  ctx.fillStyle = '#0c1f3f'; ctx.fill();
+  ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = '#60a5fa'; ctx.font = `bold 13px -apple-system,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('POOL', cx, cy - 10);
+  ctx.fillStyle = '#10b981'; ctx.font = `bold 14px -apple-system,sans-serif`;
+  ctx.fillText(`$${Math.round(poolBal).toLocaleString()}`, cx, cy + 8);
+
+  if (roundData && roundData.monthly_yield_net > 0) {
+    ctx.fillStyle = '#f59e0b'; ctx.font = `10px -apple-system,sans-serif`;
+    ctx.fillText(`+$${roundData.monthly_yield_net.toFixed(1)} yield`, cx, cy + 24);
+  }
+
+  // Connection lines from active contributors to pool
+  agentNodes.forEach(node => {
+    if (node.currentAction === 'contribute') {
+      const grad2 = ctx.createLinearGradient(node.x, node.y, cx, cy);
+      grad2.addColorStop(0, 'rgba(16,185,129,0.4)');
+      grad2.addColorStop(1, 'rgba(16,185,129,0)');
+      ctx.beginPath(); ctx.moveTo(node.x, node.y); ctx.lineTo(cx, cy);
+      ctx.strokeStyle = grad2; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    if (node.isPayout) {
+      const grad3 = ctx.createLinearGradient(cx, cy, node.x, node.y);
+      grad3.addColorStop(0, 'rgba(96,165,250,0.6)');
+      grad3.addColorStop(1, 'rgba(96,165,250,0.1)');
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(node.x, node.y);
+      ctx.strokeStyle = grad3; ctx.lineWidth = 2.5; ctx.setLineDash([4,3]);
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  });
+
+  // Agent nodes
+  agentNodes.forEach(node => {
+    const isDropped = node.currentAction === 'inactive' || node.dropout_round <= roundIdx;
+    const action = node.currentAction;
+
+    // Glow ring
+    let glowColor = null;
+    if (node.isPayout) glowColor = 'rgba(96,165,250,0.5)';
+    else if (action === 'contribute') glowColor = 'rgba(16,185,129,0.35)';
+    else if (action === 'skip') glowColor = 'rgba(245,158,11,0.3)';
+    else if (action === 'dropout') glowColor = 'rgba(239,68,68,0.4)';
+    else if (node.currentEvent) glowColor = 'rgba(139,92,246,0.35)';
+
+    if (glowColor) {
+      const g = ctx.createRadialGradient(node.x, node.y, node.radius*0.5, node.x, node.y, node.radius*2.2);
+      g.addColorStop(0, glowColor);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(node.x, node.y, node.radius*2.2, 0, Math.PI*2);
+      ctx.fillStyle = g; ctx.fill();
+    }
+
+    // Main circle
+    ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI*2);
+    ctx.fillStyle = isDropped ? '#0d1525' : node.color + (action === 'inactive' ? '30' : '22');
+    ctx.fill();
+
+    // Border
+    let borderColor = isDropped ? '#1a2030' : node.color;
+    if (node.isPayout) borderColor = '#60a5fa';
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isDropped ? 1 : 2;
+    ctx.stroke();
+
+    // Action indicator ring
+    if (action === 'contribute') { ctx.strokeStyle='#10b981'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(node.x, node.y, node.radius+5, 0, Math.PI*2); ctx.stroke(); }
+    if (action === 'skip') { ctx.strokeStyle='#f59e0b'; ctx.lineWidth=2; ctx.setLineDash([4,3]); ctx.beginPath(); ctx.arc(node.x, node.y, node.radius+4, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+    if (action === 'dropout') { ctx.strokeStyle='#ef4444'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(node.x, node.y, node.radius+5, 0, Math.PI*2); ctx.stroke(); }
+    if (node.isPayout) { ctx.strokeStyle='#60a5fa'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(node.x, node.y, node.radius+7, 0, Math.PI*2); ctx.stroke(); }
+
+    // Event dot
+    if (node.currentEvent) {
+      ctx.beginPath(); ctx.arc(node.x + node.radius*0.6, node.y - node.radius*0.6, 6, 0, Math.PI*2);
+      ctx.fillStyle = '#8b5cf6'; ctx.fill();
+    }
+
+    // Name
+    ctx.fillStyle = isDropped ? '#334155' : '#e2e8f0';
+    ctx.font = `bold 10px -apple-system,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(node.name, node.x, node.y - 5);
+
+    // Personality short
+    const typeShort = { reliable_saver:'Reliable', group_leader:'Leader', frugal_planner:'Frugal',
+      optimistic_newcomer:'Newcomer', skeptical_veteran:'Skeptic', financially_stressed:'Stressed',
+      irregular_earner:'Gig', social_follower:'Follower', impatient_saver:'Impatient', opportunistic_freerider:'Freerider' };
+    ctx.fillStyle = isDropped ? '#1e293b' : node.color;
+    ctx.font = `8px -apple-system,sans-serif`;
+    ctx.fillText(typeShort[node.personality] || node.personality, node.x, node.y + 7);
+
+    // Action symbol
+    if (!isDropped) {
+      const sym = {contribute:'✓', skip:'—', dropout:'✕', inactive:'', null:'·'}[action] || '·';
+      ctx.fillStyle = {contribute:'#10b981', skip:'#f59e0b', dropout:'#ef4444', inactive:'#334155', null:'#334155'}[action] || '#334155';
+      ctx.font = `bold 11px -apple-system,sans-serif`;
+      ctx.fillText(sym, node.x, node.y + 18);
+    }
+  });
+}
+
+// ──────────────────────────────────────────────
+// UI UPDATES
+// ──────────────────────────────────────────────
+function updateUI(roundData, roundIdx, run) {
+  document.getElementById('roundNum').textContent = roundIdx + 1;
+  document.getElementById('canvasRound').textContent = `Round ${roundIdx + 1} / ${run.num_rounds}`;
+  document.getElementById('canvasSub').textContent = `${currentScenario === 'dyorx' ? 'DYORX 7% APY' : 'Traditional 0% APY'} · ${run.composition_label}`;
+
+  if (roundData) {
+    document.getElementById('poolVal').textContent = `$${Math.round(roundData.pool_balance).toLocaleString()}`;
+    const yieldNet = roundData.monthly_yield_net || 0;
+    const yieldGross = roundData.monthly_yield_gross || 0;
+    document.getElementById('poolYield').textContent = yieldGross > 0
+      ? `+$${yieldNet.toFixed(2)} yield this round (gross $${yieldGross.toFixed(2)})`
+      : 'No yield (traditional circle)';
+
+    // Payout flash
+    if (roundData.payout_amount > 0 && roundData.payout_to) {
+      const flash = document.getElementById('payoutFlash');
+      document.getElementById('pfAmt').textContent = `$${Math.round(roundData.payout_amount).toLocaleString()}`;
+      document.getElementById('pfName').textContent = `${roundData.payout_to} receives the pot`;
+      flash.classList.add('show');
+      setTimeout(() => flash.classList.remove('show'), 2200);
+    }
+
+    // Canvas stats bar
+    document.getElementById('canvasStats').innerHTML = `
+      <div style="background:rgba(5,8,16,0.8);border:1px solid #1a2744;border-radius:6px;padding:5px 10px;font-size:0.7rem;color:#10b981;">✓ ${roundData.contributions} contributed</div>
+      <div style="background:rgba(5,8,16,0.8);border:1px solid #1a2744;border-radius:6px;padding:5px 10px;font-size:0.7rem;color:#f59e0b;">— ${roundData.skips} skipped</div>
+      <div style="background:rgba(5,8,16,0.8);border:1px solid #1a2744;border-radius:6px;padding:5px 10px;font-size:0.7rem;color:#ef4444;">✕ ${roundData.dropouts} dropped</div>
+      <div style="background:rgba(5,8,16,0.8);border:1px solid #1a2744;border-radius:6px;padding:5px 10px;font-size:0.7rem;color:#64748b;">👥 ${roundData.active_count} active</div>`;
+
+    // Stats grid
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat-box"><div class="stat-val" style="color:#10b981;">${roundData.contributions}</div><div class="stat-label">Contributed</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#f59e0b;">${roundData.skips}</div><div class="stat-label">Skipped</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#ef4444;">${roundData.dropouts}</div><div class="stat-label">Dropped Out</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:#64748b;">${roundData.active_count}</div><div class="stat-label">Still Active</div></div>
+      ${roundData.payout_to ? `<div class="stat-box" style="grid-column:span 2;"><div class="stat-val" style="color:#60a5fa;font-size:0.9rem;">$${Math.round(roundData.payout_amount).toLocaleString()}</div><div class="stat-label">Payout → ${roundData.payout_to}</div></div>` : ''}`;
+
+    // Event log
+    appendEventLog(roundIdx + 1, roundData);
+  }
+
+  // Agent list
+  buildAgentList(roundIdx, run);
+}
+
+function appendEventLog(round, roundData) {
+  const log = document.getElementById('eventLog');
+  agentNodes.forEach(node => {
+    if (!node.currentAction || node.currentAction === 'inactive') return;
+    const cls = node.currentAction;
+    const eventStr = node.currentEvent ? ` <span style="color:#8b5cf6">[${node.currentEvent.replace(/_/g,' ')}]</span>` : '';
+    const entry = document.createElement('div');
+    entry.className = 'event-entry';
+    entry.innerHTML = `<span class="ee-round">R${round}</span> <span class="ee-agent" style="color:${node.color}">${node.name}</span> → <span class="ee-${cls}">${cls.toUpperCase()}</span>${eventStr}`;
+    log.insertBefore(entry, log.firstChild);
+  });
+  // Keep log short
+  while (log.children.length > 40) log.removeChild(log.lastChild);
+}
+
+function buildAgentList(roundIdx, run) {
+  const list = document.getElementById('agentList');
+  list.innerHTML = '';
+  agentNodes.forEach((node, i) => {
+    const isDropped = node.dropout_round && node.dropout_round <= roundIdx + 1 && node.currentAction !== 'contribute' && node.currentAction !== 'skip';
+    const action = node.currentAction || (isDropped ? 'inactive' : null);
+    const card = document.createElement('div');
+    card.className = `agent-card ${isDropped ? 'dropped' : ''} ${selectedAgent === i ? 'selected' : ''}`;
+    const contrib = run.agents[i].total_contributed || 0;
+    const yield_e = run.agents[i].yield_earned || 0;
+
+    card.innerHTML = `
+      <div class="ac-top">
+        <span class="ac-name" style="color:${node.color}">${node.name}</span>
+        <span class="ac-action ${action || 'inactive'}">${action || 'waiting'}</span>
+      </div>
+      <div class="ac-type">${node.personality.replace(/_/g,' ')}</div>
+      <div class="ac-bars">
+        <div class="ac-bar-row"><span class="ac-bar-label">Reliability</span><div class="ac-bar-track"><div class="ac-bar-fill" style="width:${node.reliability*100}%;background:${node.color};"></div></div></div>
+        <div class="ac-bar-row"><span class="ac-bar-label">Yield sense</span><div class="ac-bar-track"><div class="ac-bar-fill" style="width:${node.yield_sensitivity*100}%;background:#3b82f6;"></div></div></div>
+        <div class="ac-bar-row"><span class="ac-bar-label">Contributed</span><div class="ac-bar-track"><div class="ac-bar-fill" style="width:${Math.min((contrib/2000)*100,100)}%;background:#10b981;"></div></div><span>$${contrib}</span></div>
+        ${yield_e > 0 ? `<div class="ac-bar-row"><span class="ac-bar-label">Yield earned</span><div class="ac-bar-track"><div class="ac-bar-fill" style="width:${Math.min((yield_e/100)*100,100)}%;background:#f59e0b;"></div></div><span>$${yield_e.toFixed(1)}</span></div>` : ''}
+      </div>
+      ${node.reasoning && selectedAgent === i ? `<div class="ac-reasoning">"${node.reasoning}"</div>` : ''}`;
+
+    card.addEventListener('click', () => {
+      selectedAgent = selectedAgent === i ? null : i;
+      buildAgentList(roundIdx, run);
+    });
+    list.appendChild(card);
+  });
+}
+
+// ──────────────────────────────────────────────
+// PLAYBACK CONTROLS
+// ──────────────────────────────────────────────
+function setupControls() {
+  document.getElementById('playBtn').addEventListener('click', togglePlay);
+  document.getElementById('resetBtn').addEventListener('click', () => { stopPlay(); currentRound=0; if(currentScenario) renderRound(0); });
+  document.getElementById('roundSlider').addEventListener('input', e => { currentRound = parseInt(e.target.value); if(currentScenario) renderRound(currentRound); });
+
+  document.querySelectorAll('.speed-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      playSpeed = parseInt(btn.dataset.speed);
+      if (playing) { stopPlay(); startPlay(); }
+    });
+  });
+}
+
+function togglePlay() {
+  if (playing) stopPlay();
+  else startPlay();
+}
+
+function startPlay() {
+  if (!currentScenario) return;
+  playing = true;
+  document.getElementById('playBtn').textContent = '⏸ Pause';
+  document.getElementById('playBtn').classList.add('active');
+  step();
+}
+
+function step() {
+  if (!playing) return;
+  const run = swarmData[currentScenario][currentCircleIdx];
+  if (currentRound >= run.num_rounds - 1) { stopPlay(); return; }
+  currentRound++;
+  renderRound(currentRound);
+  playTimer = setTimeout(step, playSpeed);
+}
+
+function stopPlay() {
+  playing = false;
+  clearTimeout(playTimer);
+  document.getElementById('playBtn').textContent = '▶ Play';
+  document.getElementById('playBtn').classList.remove('active');
+}
+
+// ──────────────────────────────────────────────
+// BOOT
+// ──────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>

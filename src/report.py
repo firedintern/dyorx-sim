@@ -14,6 +14,24 @@ def generate_report(results: dict, output_dir: str = "output") -> dict:
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # save swarm data (full agent decision histories + round logs)
+    swarm = {}
+    for scenario_key, runs in results.items():
+        swarm[scenario_key] = []
+        for r in runs:
+            swarm[scenario_key].append({
+                "scenario": r["scenario"],
+                "run_index": r["run_index"],
+                "composition_label": r.get("composition_label", ""),
+                "apy": r["apy"],
+                "num_rounds": r["num_rounds"],
+                "agents": r.get("agents_swarm", r["agents"]),
+                "round_log": r["circle"]["round_log"],
+            })
+    swarm_path = Path(output_dir) / "swarm_data.json"
+    with open(swarm_path, "w") as f:
+        json.dump(swarm, f, indent=2, default=str)
+
     # aggregate metrics across runs
     aggregated = {}
     for scenario_key, runs in results.items():

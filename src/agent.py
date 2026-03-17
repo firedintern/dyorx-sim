@@ -243,3 +243,14 @@ Nothing else. No markdown, no explanation outside the JSON."""
             "yield_earned": self.yield_earned,
             "dropout_round": self.dropout_round
         }
+
+    def swarm_summary(self) -> dict:
+        """full agent data for swarm visualizer — includes decision history"""
+        return {
+            **self.summary(),
+            "reliability": self.personality["reliability"],
+            "yield_sensitivity": self.personality["yield_sensitivity"],
+            "social_pressure_sensitivity": self.personality["social_pressure_sensitivity"],
+            "income_stability": self.personality["income_stability"],
+            "decision_history": self.decision_history,
+        }

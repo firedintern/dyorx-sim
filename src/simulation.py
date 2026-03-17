@@ -121,6 +121,7 @@ def run_scenario(
         "num_agents": num_agents,
         "num_rounds": num_rounds,
         "agents": [a.summary() for a in agents],
+        "agents_swarm": [a.swarm_summary() for a in agents],
         "circle": circle.summary(),
         "metrics": compute_metrics(agents, circle)
     }

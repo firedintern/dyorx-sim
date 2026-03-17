@@ -6,7 +6,7 @@ Orchestrates the full experiment comparing traditional vs DYORX circles.
 import json
 import random
 from pathlib import Path
-from openai import OpenAI
+from anthropic import Anthropic
 
 from .agent import Agent
 from .circle import Circle
@@ -21,25 +21,52 @@ def load_config(config_dir: str = "config") -> tuple[dict, dict]:
     return agents_config, scenarios_config
 
 
-def create_agents(
+def _get_personality_by_type(personalities: list, ptype: str) -> dict:
+    """look up a personality dict by type name"""
+    for p in personalities:
+        if p["type"] == ptype:
+            return p
+    raise ValueError(f"Unknown personality type: '{ptype}'. Check agents.json.")
+
+
+def create_agents_from_composition(
     agents_config: dict,
-    num_agents: int,
-    llm_client: OpenAI,
+    composition: list | str,
+    llm_client: Anthropic,
     model: str
 ) -> list[Agent]:
-    """spawn agents with weighted personality distribution"""
+    """
+    Build agents from a explicit composition list or random weighted draw.
+    composition is either:
+      - "random"  → weighted random draw (control group)
+      - list of {"type": str, "count": int}
+    """
     personalities = agents_config["personalities"]
     names = list(agents_config["name_pool"])
     random.shuffle(names)
 
     agents = []
-    for i in range(num_agents):
-        # weighted random personality
+
+    if composition == "random":
         weights = [p["weight"] for p in personalities]
-        personality = random.choices(personalities, weights=weights, k=1)[0]
-        name = names[i % len(names)]
-        agent = Agent(name=name, personality=personality, llm_client=llm_client, model=model)
-        agents.append(agent)
+        # determine num_agents from total in scenarios (caller passes total via len check)
+        # we generate 10 agents for the random group
+        for i in range(10):
+            personality = random.choices(personalities, weights=weights, k=1)[0]
+            name = names[i % len(names)]
+            agents.append(Agent(name=name, personality=personality,
+                                llm_client=llm_client, model=model))
+    else:
+        i = 0
+        for slot in composition:
+            ptype = slot["type"]
+            count = slot["count"]
+            personality = _get_personality_by_type(personalities, ptype)
+            for _ in range(count):
+                name = names[i % len(names)]
+                agents.append(Agent(name=name, personality=personality,
+                                    llm_client=llm_client, model=model))
+                i += 1
 
     return agents
 
@@ -47,18 +74,20 @@ def create_agents(
 def run_scenario(
     scenario_config: dict,
     agents_config: dict,
-    llm_client: OpenAI,
+    llm_client: Anthropic,
     model: str,
     sim_config: dict,
     run_index: int = 1,
+    composition_meta: dict = None,
     on_round_complete=None
 ) -> dict:
-    """run a single scenario (traditional or dyorx)"""
-    num_agents = scenario_config["num_agents"]
+    """run a single scenario (traditional or dyorx) with a given circle composition"""
     num_rounds = scenario_config["num_rounds"]
 
-    # create fresh agents for this run
-    agents = create_agents(agents_config, num_agents, llm_client, model)
+    # build agents from the composition for this run
+    composition = composition_meta["composition"] if composition_meta else "random"
+    agents = create_agents_from_composition(agents_config, composition, llm_client, model)
+    num_agents = len(agents)
 
     # create circle
     circle = Circle(scenario_config)
@@ -80,12 +109,14 @@ def run_scenario(
         round_data = circle.process_round(agents, round_num)
 
         if on_round_complete:
-            on_round_complete(scenario_config["name"], run_index, round_data)
+            label = composition_meta["label"] if composition_meta else f"run {run_index}"
+            on_round_complete(scenario_config["name"], run_index, label, round_data)
 
     # compile results
     return {
         "scenario": scenario_config["name"],
         "run_index": run_index,
+        "composition_label": composition_meta["label"] if composition_meta else "random",
         "apy": scenario_config.get("apy", 0),
         "num_agents": num_agents,
         "num_rounds": num_rounds,
@@ -102,10 +133,16 @@ def compute_metrics(agents: list[Agent], circle: Circle) -> dict:
     dropped = [a for a in agents if not a.active]
 
     total_contributed = sum(a.total_contributed for a in agents)
-    total_yield = sum(a.yield_earned for a in agents)
+    total_yield_net = sum(a.yield_earned for a in agents)
     avg_dropout_round = (
         sum(a.dropout_round for a in dropped) / len(dropped)
         if dropped else None
+    )
+
+    paid_out = [a for a in agents if a.payout_received]
+    avg_payout_received = (
+        sum(a.payout_amount for a in paid_out) / len(paid_out)
+        if paid_out else 0.0
     )
 
     return {
@@ -113,31 +150,35 @@ def compute_metrics(agents: list[Agent], circle: Circle) -> dict:
         "completed_count": len(completed),
         "dropout_count": len(dropped),
         "total_contributed": total_contributed,
-        "total_yield_earned": total_yield,
+        "total_yield_earned_by_members": total_yield_net,
+        "total_yield_generated_gross": circle.total_yield_generated,
+        "total_dyorx_revenue": circle.total_dyorx_revenue,
         "avg_dropout_round": avg_dropout_round,
         "pool_balance_final": circle.pool_balance,
-        "total_yield_generated": circle.total_yield_generated,
+        "payout_recipients": len(paid_out),
+        "avg_payout_received": avg_payout_received,
         "avg_months_contributed": sum(a.months_contributed for a in agents) / total if total > 0 else 0,
         "avg_months_skipped": sum(a.months_skipped for a in agents) / total if total > 0 else 0,
     }
 
 
 def run_full_experiment(
-    llm_client: OpenAI,
+    llm_client: Anthropic,
     model: str,
     config_dir: str = "config",
     on_round_complete=None
 ) -> dict:
-    """run all scenarios with multiple runs each, return full results"""
+    """run all scenarios with one run per circle composition, return full results"""
     agents_config, scenarios_config = load_config(config_dir)
     sim_config = scenarios_config.get("simulation", {})
-    runs_per = sim_config.get("runs_per_scenario", 3)
+    compositions = sim_config.get("circle_compositions", [])
 
     all_results = {}
 
     for scenario_key, scenario_config in scenarios_config["scenarios"].items():
         scenario_runs = []
-        for run_idx in range(1, runs_per + 1):
+        for comp_meta in compositions:
+            run_idx = comp_meta["circle_index"]
             result = run_scenario(
                 scenario_config=scenario_config,
                 agents_config=agents_config,
@@ -145,6 +186,7 @@ def run_full_experiment(
                 model=model,
                 sim_config=sim_config,
                 run_index=run_idx,
+                composition_meta=comp_meta,
                 on_round_complete=on_round_complete
             )
             scenario_runs.append(result)

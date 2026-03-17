@@ -29,6 +29,25 @@ def generate_report(results: dict, output_dir: str = "output") -> dict:
                 }
             else:
                 agg[key] = values
+
+        # per-circle breakdown
+        per_circle = []
+        for r in runs:
+            m = r["metrics"]
+            per_circle.append({
+                "circle_index": r["run_index"],
+                "label": r.get("composition_label", f"run {r['run_index']}"),
+                "num_agents": r["num_agents"],
+                "completion_rate": m["completion_rate"],
+                "completed_count": m["completed_count"],
+                "dropout_count": m["dropout_count"],
+                "total_contributed": m["total_contributed"],
+                "avg_payout_received": m["avg_payout_received"],
+                "payout_recipients": m["payout_recipients"],
+                "total_yield_earned_by_members": m.get("total_yield_earned_by_members", 0),
+                "avg_dropout_round": m.get("avg_dropout_round"),
+            })
+
         aggregated[scenario_key] = {
             "config": {
                 "name": runs[0]["scenario"],
@@ -37,7 +56,8 @@ def generate_report(results: dict, output_dir: str = "output") -> dict:
                 "num_rounds": runs[0]["num_rounds"],
                 "num_runs": len(runs)
             },
-            "metrics": agg
+            "metrics": agg,
+            "per_circle": per_circle
         }
 
     # compute deltas (dyorx vs traditional)
@@ -88,16 +108,19 @@ def render_markdown(report: dict) -> str:
         m = data["metrics"]
 
         lines.append(f"## {cfg['name']}")
-        lines.append(f"APY: {cfg['apy']:.1%} | Agents: {cfg['num_agents']} | Rounds: {cfg['num_rounds']} | Runs: {cfg['num_runs']}\n")
+        lines.append(f"APY: {cfg['apy']:.1%} | Agents: {cfg['num_agents']} | Rounds: {cfg['num_rounds']} | Circles: {cfg['num_runs']}\n")
 
         if isinstance(m.get("completion_rate"), dict):
-            lines.append(f"→ Completion rate: {m['completion_rate']['mean']:.1%} (range: {m['completion_rate']['min']:.1%} to {m['completion_rate']['max']:.1%})")
-            lines.append(f"→ Completed: {m['completed_count']['mean']:.1f} / {cfg['num_agents']}")
-            lines.append(f"→ Dropouts: {m['dropout_count']['mean']:.1f}")
-            lines.append(f"→ Total contributed: ${m['total_contributed']['mean']:.2f}")
+            lines.append(f"**Avg completion rate: {m['completion_rate']['mean']:.1%}** (range: {m['completion_rate']['min']:.1%} – {m['completion_rate']['max']:.1%})")
+            lines.append(f"→ Completed: {m['completed_count']['mean']:.1f} / {cfg['num_agents']} avg")
+            lines.append(f"→ Dropouts: {m['dropout_count']['mean']:.1f} avg")
+            lines.append(f"→ Total contributed by all members: ${m['total_contributed']['mean']:.2f} avg")
+            lines.append(f"→ Payout recipients: {m['payout_recipients']['mean']:.1f} | Avg payout received: ${m['avg_payout_received']['mean']:.2f}")
 
-            if m.get("total_yield_earned") and m["total_yield_earned"]["mean"] > 0:
-                lines.append(f"→ Total yield earned: ${m['total_yield_earned']['mean']:.2f}")
+            if m.get("total_yield_earned_by_members") and m["total_yield_earned_by_members"]["mean"] > 0:
+                lines.append(f"→ Total yield earned by members (net 85%): ${m['total_yield_earned_by_members']['mean']:.2f} avg")
+                lines.append(f"→ Total yield generated (gross): ${m['total_yield_generated_gross']['mean']:.2f} avg")
+                lines.append(f"→ DYORX platform revenue (15% spread): ${m['total_dyorx_revenue']['mean']:.2f} avg")
 
             if m.get("avg_dropout_round") and isinstance(m["avg_dropout_round"], dict):
                 lines.append(f"→ Avg dropout round: {m['avg_dropout_round']['mean']:.1f}")
@@ -105,6 +128,22 @@ def render_markdown(report: dict) -> str:
             lines.append(f"→ Avg months contributed per agent: {m['avg_months_contributed']['mean']:.1f}")
             lines.append(f"→ Avg months skipped per agent: {m['avg_months_skipped']['mean']:.1f}")
 
+        # per-circle breakdown table
+        lines.append("")
+        lines.append("### Per-Circle Breakdown")
+        lines.append("")
+        lines.append("| # | Composition | Completion | Dropouts | Total Contributed | Avg Payout | Yield Earned |")
+        lines.append("|---|-------------|------------|----------|-------------------|------------|--------------|")
+        for c in data.get("per_circle", []):
+            yield_col = f"${c['total_yield_earned_by_members']:.2f}" if c["total_yield_earned_by_members"] > 0 else "—"
+            lines.append(
+                f"| {c['circle_index']} | {c['label']} | "
+                f"{c['completion_rate']:.0%} ({c['completed_count']}/{c['num_agents']}) | "
+                f"{c['dropout_count']} | "
+                f"${c['total_contributed']:.0f} | "
+                f"${c['avg_payout_received']:.0f} | "
+                f"{yield_col} |"
+            )
         lines.append("")
 
     if report.get("deltas"):
@@ -118,8 +157,10 @@ def render_markdown(report: dict) -> str:
             lines.append(f"→ Total contributed: ${d['total_contributed']['absolute']:+.2f} ({d['total_contributed']['percentage']:+.1f}%)")
         if "dropout_count" in d:
             lines.append(f"→ Dropouts: {d['dropout_count']['absolute']:+.1f}")
-        if "total_yield_earned" in d:
-            lines.append(f"→ Yield advantage: ${d['total_yield_earned']['absolute']:+.2f}")
+        if "total_yield_earned_by_members" in d:
+            lines.append(f"→ Member yield advantage: ${d['total_yield_earned_by_members']['absolute']:+.2f}")
+        if "avg_payout_received" in d:
+            lines.append(f"→ Avg payout size delta: ${d['avg_payout_received']['absolute']:+.2f} ({d['avg_payout_received']['percentage']:+.1f}%)")
         if "avg_dropout_round" in d and d["avg_dropout_round"]["absolute"] != 0:
             lines.append(f"→ Avg dropout timing: {d['avg_dropout_round']['absolute']:+.1f} rounds later")
 
@@ -131,14 +172,14 @@ def render_markdown(report: dict) -> str:
     if report.get("deltas") and "completion_rate" in report["deltas"]:
         delta_cr = report["deltas"]["completion_rate"]["absolute"]
         if delta_cr > 0.05:
-            lines.append("SUPPORTED: DeFi yields meaningfully improved circle completion rates.")
+            lines.append("✅ SUPPORTED: DeFi yields meaningfully improved circle completion rates.")
             lines.append(f"Adding yield increased completion by {delta_cr:.1%}, confirming the DYORX thesis")
             lines.append("that people save more when their money earns while sitting in the pool.")
         elif delta_cr > 0:
-            lines.append("WEAKLY SUPPORTED: DeFi yields showed marginal improvement.")
-            lines.append("Consider testing with higher APY or more agent runs for statistical significance.")
+            lines.append("⚠️ WEAKLY SUPPORTED: DeFi yields showed marginal improvement.")
+            lines.append("Consider testing with higher APY or more runs for statistical significance.")
         else:
-            lines.append("NOT SUPPORTED in this run: yields did not improve completion.")
+            lines.append("❌ NOT SUPPORTED in this run: yields did not improve completion.")
             lines.append("Check agent configs, try more runs, or adjust yield parameters.")
 
     lines.append("")

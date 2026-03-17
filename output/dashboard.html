@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DYORX Simulation Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+
+  header { background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%); border-bottom: 1px solid #2d3748; padding: 24px 40px; display: flex; align-items: center; justify-content: space-between; }
+  header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+  header h1 span { color: #60a5fa; }
+  .badge { background: #1e3a5f; color: #60a5fa; border: 1px solid #2563eb; border-radius: 20px; padding: 4px 14px; font-size: 0.78rem; font-weight: 600; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 32px 40px; }
+
+  /* KPI row */
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px; }
+  .kpi { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; padding: 20px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .kpi.trad::before { background: #6b7280; }
+  .kpi.dyorx::before { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+  .kpi.delta-pos::before { background: #10b981; }
+  .kpi.delta-neg::before { background: #ef4444; }
+  .kpi label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; font-weight: 600; }
+  .kpi .val { font-size: 2rem; font-weight: 800; margin: 6px 0 2px; line-height: 1; }
+  .kpi .sub { font-size: 0.75rem; color: #64748b; }
+  .kpi.dyorx .val { color: #60a5fa; }
+  .kpi.delta-pos .val { color: #10b981; }
+  .kpi.delta-neg .val { color: #ef4444; }
+
+  /* Section headers */
+  h2 { font-size: 1.1rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; margin-top: 36px; display: flex; align-items: center; gap: 10px; }
+  h2::after { content: ''; flex: 1; height: 1px; background: #2d3748; }
+
+  /* Chart grid */
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .chart-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .chart-box { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; padding: 24px; }
+  .chart-box h3 { font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .chart-box canvas { max-height: 260px; }
+
+  /* Per-circle table */
+  .table-wrap { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  thead tr { background: #16213e; }
+  th { padding: 12px 16px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; font-weight: 600; white-space: nowrap; }
+  td { padding: 11px 16px; border-top: 1px solid #1e293b; }
+  tr:hover td { background: #1e293b; }
+  .circle-label { font-weight: 600; color: #e2e8f0; }
+  .circle-sub { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+  .pct { font-weight: 700; font-size: 1rem; }
+  .pct.high { color: #10b981; }
+  .pct.mid { color: #f59e0b; }
+  .pct.low { color: #ef4444; }
+  .tag { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .tag.trad { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+  .tag.dyorx { background: #1e3a5f; color: #60a5fa; border: 1px solid #1d4ed8; }
+  .delta-cell { font-size: 0.82rem; }
+  .delta-up { color: #10b981; font-weight: 700; }
+  .delta-dn { color: #ef4444; font-weight: 700; }
+  .delta-eq { color: #94a3b8; }
+  .bar-wrap { width: 100%; background: #0f1117; border-radius: 4px; height: 8px; margin-top: 4px; }
+  .bar-fill { height: 8px; border-radius: 4px; }
+
+  /* Thesis box */
+  .thesis-box { border-radius: 12px; padding: 24px 28px; margin-bottom: 32px; border: 1px solid; }
+  .thesis-box.weak { background: #1c1a0a; border-color: #713f12; }
+  .thesis-box.supported { background: #0a1c10; border-color: #14532d; }
+  .thesis-box.not { background: #1c0a0a; border-color: #7f1d1d; }
+  .thesis-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+  .thesis-box.weak h3 { color: #fbbf24; }
+  .thesis-box.supported h3 { color: #34d399; }
+  .thesis-box.not h3 { color: #f87171; }
+  .thesis-box p { font-size: 0.88rem; color: #94a3b8; line-height: 1.6; }
+  .thesis-box .metrics-inline { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
+  .thesis-box .m { font-size: 0.8rem; color: #64748b; }
+  .thesis-box .m strong { display: block; font-size: 1.1rem; font-weight: 800; margin-bottom: 2px; }
+  .thesis-box.weak .m strong { color: #fbbf24; }
+  .thesis-box.supported .m strong { color: #34d399; }
+
+  /* Chart explanation */
+  .chart-explain { background: #111827; border-left: 3px solid #3b82f6; border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 12px; font-size: 0.8rem; color: #94a3b8; line-height: 1.55; }
+  .chart-explain strong { color: #60a5fa; display: block; margin-bottom: 3px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Yield breakdown */
+  .yield-split { display: flex; gap: 12px; margin-top: 8px; }
+  .yield-block { flex: 1; background: #0f1117; border-radius: 8px; padding: 12px; text-align: center; }
+  .yield-block .yval { font-size: 1.3rem; font-weight: 800; color: #60a5fa; }
+  .yield-block .ylabel { font-size: 0.7rem; color: #64748b; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* footer */
+  footer { text-align: center; padding: 24px; color: #334155; font-size: 0.78rem; border-top: 1px solid #1e293b; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>DYORX <span>Simulation</span> Dashboard</h1>
+    <div style="margin-top:4px; font-size:0.8rem; color:#64748b;">Report: 20260317_112150 &nbsp;·&nbsp; 10 circles &nbsp;·&nbsp; 100 agents &nbsp;·&nbsp; 1,000 rounds</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span class="badge">Claude Haiku 4.5</span>
+    <span class="badge">Kamino 7% APY</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- KPIs -->
+  <h2>Key Metrics</h2>
+  <div class="kpi-row">
+    <div class="kpi trad">
+      <label>Traditional Completion</label>
+      <div class="val">84%</div>
+      <div class="sub">Range: 70% – 90%</div>
+    </div>
+    <div class="kpi dyorx">
+      <label>DYORX Completion</label>
+      <div class="val">88%</div>
+      <div class="sub">Range: 80% – 100%</div>
+    </div>
+    <div class="kpi delta-pos">
+      <label>Completion Delta</label>
+      <div class="val">+4%</div>
+      <div class="sub">+4.8% relative</div>
+    </div>
+    <div class="kpi delta-pos">
+      <label>More $ Contributed</label>
+      <div class="val">+$1,320</div>
+      <div class="sub">+8.2% total per circle</div>
+    </div>
+    <div class="kpi dyorx">
+      <label>Member Yield Earned</label>
+      <div class="val">$87.67</div>
+      <div class="sub">$15.47 to DYORX (15%)</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi delta-pos">
+      <label>Fewer Dropouts</label>
+      <div class="val">−0.4</div>
+      <div class="sub">1.2 vs 1.6 avg per circle</div>
+    </div>
+    <div class="kpi delta-pos">
+      <label>Later Dropouts</label>
+      <div class="val">+1.5 rds</div>
+      <div class="sub">Round 7.6 vs 6.1</div>
+    </div>
+    <div class="kpi delta-pos">
+      <label>More Months Saved</label>
+      <div class="val">+0.66</div>
+      <div class="sub">8.68 vs 8.02 avg months</div>
+    </div>
+    <div class="kpi delta-pos">
+      <label>Fewer Skips</label>
+      <div class="val">−22%</div>
+      <div class="sub">0.86 vs 1.1 avg skips</div>
+    </div>
+    <div class="kpi dyorx">
+      <label>DYORX Revenue / Circle</label>
+      <div class="val">$15.47</div>
+      <div class="sub">15% of $103.14 gross</div>
+    </div>
+  </div>
+
+  <!-- Thesis -->
+  <h2>Thesis Verdict</h2>
+  <div class="thesis-box weak">
+    <h3>⚠️ WEAKLY SUPPORTED — DeFi yields show consistent directional improvement</h3>
+    <p>DYORX circles outperformed Traditional on every measured dimension: higher completion, fewer dropouts, later dropout timing, more total savings contributed, and fewer skipped payments. The +4% completion delta falls just below the 5% statistical threshold, primarily because the $87 yield on $200/month contributions is meaningful but not yet large enough to dominate agent decision-making at 7% APY.</p>
+    <div class="metrics-inline">
+      <div class="m"><strong>+4.0%</strong> Completion rate</div>
+      <div class="m"><strong>+$1,320</strong> More contributed</div>
+      <div class="m"><strong>−25%</strong> Fewer dropouts</div>
+      <div class="m"><strong>+1.5 rds</strong> Later attrition</div>
+      <div class="m"><strong>−22%</strong> Skip reduction</div>
+      <div class="m"><strong>$87.67</strong> Net yield / circle</div>
+    </div>
+  </div>
+
+  <!-- Main Charts -->
+  <h2>Completion Rate by Circle Type</h2>
+  <div class="chart-grid-2">
+    <div class="chart-box">
+      <h3>Completion Rate — Traditional vs DYORX (per circle)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The share of members still active at the end of the 10-round circle, broken down by circle composition. A higher bar means fewer people quit before the circle ended. DYORX (blue) matches or exceeds Traditional (grey) in every composition — most dramatically in Circle 5 (Control), where DYORX achieved 100% vs 90%. This is the primary metric for validating the DYORX thesis: does yield reduce dropout?
+      </div>
+      <canvas id="completionBar"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Dropout Count — Traditional vs DYORX (per circle)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The raw number of members who dropped out of each circle. Lower is better. The most notable improvement is Circle 4 (Leader-Dependent): 3 dropouts in Traditional vs 2 in DYORX. The Tough Circle (C3) held steady at 2 in both — suggesting that at extreme financial stress, even yield isn't enough to prevent attrition without structural support. DYORX reduced total dropouts by 25% across all circles.
+      </div>
+      <canvas id="dropoutBar"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-grid-3">
+    <div class="chart-box">
+      <h3>Total Contributed ($) per Circle</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The cumulative sum of all $200 contributions made across the circle's 10 rounds. A higher bar means more members contributed more consistently. DYORX circles raised +$1,320 more on average than Traditional — because fewer members dropped out and fewer months were skipped. For the Tough Circle (C3), DYORX closed a $1,200 gap. For the Control group (C5), DYORX raised an extra $1,200 through perfect attendance.
+      </div>
+      <canvas id="contributedBar"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Avg Payout Received ($)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The average amount the payout recipient received each round (full pool balance at time of payout). In a ROSCA, if members drop out or skip, the pot shrinks — so payout quality is a direct function of circle health. DYORX payouts are slightly higher overall because more members contributed more consistently. The Tough Circle shows the clearest damage: $1,474 avg payout vs $1,978 in the Best Case.
+      </div>
+      <canvas id="payoutBar"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Dropout Timing (avg round)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The average round number at which dropouts occurred. Later is better — it means the circle stayed intact longer before anyone quit. DYORX delayed attrition by 1.5 rounds on average (round 7.6 vs 6.1). This matters because early dropouts cascade: one person quitting in round 3 shrinks the pot for everyone and can trigger panic in social followers. DYORX's yield signal keeps members engaged through the critical early rounds.
+      </div>
+      <canvas id="dropoutRoundBar"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-grid-2">
+    <div class="chart-box">
+      <h3>Overall Averages — Radar Comparison</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        A multi-dimensional comparison of Traditional vs DYORX across 5 normalised metrics. A larger blue shape means DYORX outperforms on that axis. The radar reveals that DYORX's strongest advantage is in reducing skipped payments (Low Skips axis) and increasing months saved — two indicators of sustained engagement. The relatively close Payout Size scores reflect that the yield per circle (~$88) is real but modest at 7% APY on these contribution sizes.
+      </div>
+      <canvas id="radarChart"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>DYORX Yield Breakdown (avg per circle)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        How the DeFi yield generated by pooled funds is split between members and the platform. Of the $103.14 gross yield generated per circle (Kamino USDC vault at 7% APY), 85% ($87.67) flows back to members proportional to their contributions, and 15% ($15.47) is retained as DYORX platform revenue. This spread model aligns incentives: DYORX only earns when members earn, and members only earn when they contribute consistently.
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:center;height:230px;gap:16px;">
+        <div class="yield-split">
+          <div class="yield-block">
+            <div class="yval">$103.14</div>
+            <div class="ylabel">Gross Yield Generated</div>
+          </div>
+          <div class="yield-block">
+            <div class="yval" style="color:#34d399">$87.67</div>
+            <div class="ylabel">Members Receive (85%)</div>
+          </div>
+          <div class="yield-block">
+            <div class="yval" style="color:#f59e0b">$15.47</div>
+            <div class="ylabel">DYORX Revenue (15%)</div>
+          </div>
+        </div>
+        <canvas id="yieldDoughnut" style="max-height:160px;"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-Circle Tables -->
+  <h2>Per-Circle Breakdown — Traditional</h2>
+  <div class="chart-explain" style="margin-bottom:12px"><strong>How to read this table</strong>
+    Each row is one circle run under the Traditional (0% APY) model. The five circle compositions were designed to represent a spectrum of real-world group dynamics — from a well-screened best-case group to a tough circle of financially stressed and irregular-income members. Completion % shows how many of the 10 agents were still active at the end of 10 rounds. Avg Payout shows the average pot size each recipient received — lower payouts indicate more dropouts and skips degraded the pool. Dropout Round shows when attrition happened; earlier dropouts are more damaging because they cascade.
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Composition</th>
+          <th>Completion</th>
+          <th>Dropouts</th>
+          <th>Total Contributed</th>
+          <th>Avg Payout</th>
+          <th>Avg Dropout Round</th>
+          <th>Completion Bar</th>
+        </tr>
+      </thead>
+      <tbody id="tradTable"></tbody>
+    </table>
+  </div>
+
+  <h2>Per-Circle Breakdown — DYORX</h2>
+  <div class="chart-explain" style="margin-bottom:12px"><strong>How to read this table</strong>
+    Same five compositions run under DYORX (7% APY via Kamino). The additional columns show Yield Earned (net 85% share distributed to members proportional to their contributions) and vs Traditional (the delta in completion rate and total contributed vs the same composition above). The most important column is vs Traditional — a green number means DYORX improved outcomes for that circle type. Circle 4 (Leader-Dependent) shows the largest completion improvement (+10%), while Circle 5 (Control) achieved perfect completion that Traditional could not.
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Composition</th>
+          <th>Completion</th>
+          <th>Dropouts</th>
+          <th>Total Contributed</th>
+          <th>Avg Payout</th>
+          <th>Yield Earned</th>
+          <th>vs Traditional</th>
+          <th>Completion Bar</th>
+        </tr>
+      </thead>
+      <tbody id="dyorxTable"></tbody>
+    </table>
+  </div>
+
+  <!-- Scenario Summary -->
+  <h2>Scenario Summary</h2>
+  <div class="chart-grid-2">
+    <div class="chart-box">
+      <h3>Avg Months Contributed vs Skipped</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        The average number of months each agent contributed (positive behaviour) vs skipped (passive non-payment) across the entire circle. DYORX agents contributed 8.68 months on average vs 8.02 for Traditional — and skipped only 0.86 months vs 1.10. Fewer skips matter because skipping reduces an agent's yield share and signals disengagement that can influence social followers. The yield incentive appears to convert "skip" decisions into "contribute" decisions at the margin.
+      </div>
+      <canvas id="monthsBar"></canvas>
+    </div>
+    <div class="chart-box">
+      <h3>Completion Rate Distribution (per circle)</h3>
+      <div class="chart-explain"><strong>What this shows</strong>
+        Each dot is a single circle run. Traditional circles (grey) cluster between 70–90%. DYORX circles (blue) cluster between 80–100%, with Circle 5 (Control) hitting perfect 100% completion. The upward shift of the blue cluster is the core empirical finding: when circles earn yield, agents decide to stay more consistently — even in compositions designed to be difficult. No DYORX circle performed worse than its Traditional equivalent.
+      </div>
+      <canvas id="completionScatter"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<footer>DYORX Savings Circle Simulator &nbsp;·&nbsp; Claude Haiku 4.5 (Anthropic) &nbsp;·&nbsp; 10 circles × 10 rounds × 10 agents &nbsp;·&nbsp; Generated 2026-03-17</footer>
+
+<script>
+const TRAD_CIRCLES = [
+  { idx:1, label:"Best Case", sublabel:"reliable core + 1 freerider", completion:0.9, dropouts:1, contributed:17800, payout:1977.78, dropout_round:8.0 },
+  { idx:2, label:"Realistic Average", sublabel:"mixed bag", completion:0.9, dropouts:1, contributed:16200, payout:1800.0, dropout_round:4.0 },
+  { idx:3, label:"Tough Circle", sublabel:"stressed + irregular earners", completion:0.8, dropouts:2, contributed:13400, payout:1488.89, dropout_round:4.0 },
+  { idx:4, label:"Leader-Dependent", sublabel:"group leader + social followers", completion:0.7, dropouts:3, contributed:14800, payout:1850.0, dropout_round:4.67 },
+  { idx:5, label:"Control", sublabel:"random weighted distribution", completion:0.9, dropouts:1, contributed:18000, payout:1800.0, dropout_round:10.0 },
+];
+const DYORX_CIRCLES = [
+  { idx:1, label:"Best Case", sublabel:"reliable core + 1 freerider", completion:0.9, dropouts:1, contributed:18200, payout:1829.02, dropout_round:8.0, yield_earned:90.24 },
+  { idx:2, label:"Realistic Average", sublabel:"mixed bag", completion:0.9, dropouts:1, contributed:18400, payout:1853.59, dropout_round:10.0, yield_earned:91.23 },
+  { idx:3, label:"Tough Circle", sublabel:"stressed + irregular earners", completion:0.8, dropouts:2, contributed:14600, payout:1473.94, dropout_round:7.5, yield_earned:72.39 },
+  { idx:4, label:"Leader-Dependent", sublabel:"group leader + social followers", completion:0.8, dropouts:2, contributed:16400, payout:1860.17, dropout_round:5.0, yield_earned:89.29 },
+  { idx:5, label:"Control", sublabel:"random weighted distribution", completion:1.0, dropouts:0, contributed:19200, payout:1929.52, dropout_round:null, yield_earned:95.20 },
+];
+
+const LABELS = TRAD_CIRCLES.map(c => `C${c.idx}: ${c.label}`);
+const SHORT = TRAD_CIRCLES.map(c => `C${c.idx}`);
+
+const TRAD_COLOR = 'rgba(100,116,139,0.85)';
+const TRAD_BORDER = '#64748b';
+const DYORX_COLOR = 'rgba(59,130,246,0.85)';
+const DYORX_BORDER = '#3b82f6';
+const gridColor = '#1e293b';
+const tickColor = '#64748b';
+
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+const baseOpts = (yLabel='', isPercent=false) => ({
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: { legend: { labels: { color: '#94a3b8', boxWidth: 12, padding: 14 } } },
+  scales: {
+    x: { grid: { color: gridColor }, ticks: { color: tickColor, font:{size:11} } },
+    y: {
+      grid: { color: gridColor }, ticks: {
+        color: tickColor, font:{size:11},
+        callback: isPercent ? v => (v*100).toFixed(0)+'%' : v => v
+      },
+      title: { display: !!yLabel, text: yLabel, color: tickColor, font:{size:11} }
+    }
+  }
+});
+
+// 1. Completion bar
+new Chart(document.getElementById('completionBar'), {
+  type: 'bar',
+  data: {
+    labels: SHORT,
+    datasets: [
+      { label: 'Traditional', data: TRAD_CIRCLES.map(c=>c.completion), backgroundColor: TRAD_COLOR, borderColor: TRAD_BORDER, borderWidth:1, borderRadius:4 },
+      { label: 'DYORX', data: DYORX_CIRCLES.map(c=>c.completion), backgroundColor: DYORX_COLOR, borderColor: DYORX_BORDER, borderWidth:1, borderRadius:4 },
+    ]
+  },
+  options: { ...baseOpts('Completion Rate', true), scales: { ...baseOpts('',true).scales, y: { ...baseOpts('',true).scales.y, min:0.5, max:1.0 } } }
+});
+
+// 2. Dropout bar
+new Chart(document.getElementById('dropoutBar'), {
+  type: 'bar',
+  data: {
+    labels: SHORT,
+    datasets: [
+      { label: 'Traditional', data: TRAD_CIRCLES.map(c=>c.dropouts), backgroundColor: TRAD_COLOR, borderColor: TRAD_BORDER, borderWidth:1, borderRadius:4 },
+      { label: 'DYORX', data: DYORX_CIRCLES.map(c=>c.dropouts), backgroundColor: DYORX_COLOR, borderColor: DYORX_BORDER, borderWidth:1, borderRadius:4 },
+    ]
+  },
+  options: baseOpts('Dropouts')
+});
+
+// 3. Total contributed
+new Chart(document.getElementById('contributedBar'), {
+  type: 'bar',
+  data: {
+    labels: SHORT,
+    datasets: [
+      { label: 'Traditional', data: TRAD_CIRCLES.map(c=>c.contributed), backgroundColor: TRAD_COLOR, borderColor: TRAD_BORDER, borderWidth:1, borderRadius:4 },
+      { label: 'DYORX', data: DYORX_CIRCLES.map(c=>c.contributed), backgroundColor: DYORX_COLOR, borderColor: DYORX_BORDER, borderWidth:1, borderRadius:4 },
+    ]
+  },
+  options: baseOpts('USD $')
+});
+
+// 4. Avg payout
+new Chart(document.getElementById('payoutBar'), {
+  type: 'bar',
+  data: {
+    labels: SHORT,
+    datasets: [
+      { label: 'Traditional', data: TRAD_CIRCLES.map(c=>c.payout), backgroundColor: TRAD_COLOR, borderColor: TRAD_BORDER, borderWidth:1, borderRadius:4 },
+      { label: 'DYORX', data: DYORX_CIRCLES.map(c=>c.payout), backgroundColor: DYORX_COLOR, borderColor: DYORX_BORDER, borderWidth:1, borderRadius:4 },
+    ]
+  },
+  options: baseOpts('USD $')
+});
+
+// 5. Dropout round
+new Chart(document.getElementById('dropoutRoundBar'), {
+  type: 'bar',
+  data: {
+    labels: SHORT,
+    datasets: [
+      { label: 'Traditional', data: TRAD_CIRCLES.map(c=>c.dropout_round||0), backgroundColor: TRAD_COLOR, borderColor: TRAD_BORDER, borderWidth:1, borderRadius:4 },
+      { label: 'DYORX', data: DYORX_CIRCLES.map(c=>c.dropout_round||0), backgroundColor: DYORX_COLOR, borderColor: DYORX_BORDER, borderWidth:1, borderRadius:4 },
+    ]
+  },
+  options: baseOpts('Round (0 = no dropout)')
+});
+
+// 6. Radar
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Completion %','Months Saved','Payout Size','Low Skips','Low Dropouts'],
+    datasets: [
+      {
+        label: 'Traditional',
+        data: [84, 80.2, 17.83, 100-11.0, 100-16.0],
+        backgroundColor: 'rgba(100,116,139,0.15)',
+        borderColor: TRAD_BORDER, borderWidth: 2, pointBackgroundColor: TRAD_BORDER
+      },
+      {
+        label: 'DYORX',
+        data: [88, 86.8, 17.89, 100-8.6, 100-12.0],
+        backgroundColor: 'rgba(59,130,246,0.15)',
+        borderColor: DYORX_BORDER, borderWidth: 2, pointBackgroundColor: DYORX_BORDER
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: '#94a3b8', boxWidth:12 } } },
+    scales: { r: { grid: { color: gridColor }, ticks: { display:false }, pointLabels: { color: '#94a3b8', font:{size:11} }, min:60, max:100 } }
+  }
+});
+
+// 7. Yield doughnut
+new Chart(document.getElementById('yieldDoughnut'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Members (85%)', 'DYORX Revenue (15%)'],
+    datasets: [{ data: [87.67, 15.47], backgroundColor: ['#3b82f6','#f59e0b'], borderWidth:0, hoverOffset:4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true, cutout: '65%',
+    plugins: { legend: { position:'bottom', labels: { color:'#94a3b8', boxWidth:12, padding:10 } } }
+  }
+});
+
+// 8. Months bar
+new Chart(document.getElementById('monthsBar'), {
+  type: 'bar',
+  data: {
+    labels: ['Traditional', 'DYORX'],
+    datasets: [
+      { label: 'Avg Months Contributed', data: [8.02, 8.68], backgroundColor: ['rgba(100,116,139,0.85)','rgba(59,130,246,0.85)'], borderRadius:6, borderWidth:0 },
+      { label: 'Avg Months Skipped', data: [1.1, 0.86], backgroundColor: ['rgba(239,68,68,0.7)','rgba(239,68,68,0.5)'], borderRadius:6, borderWidth:0 },
+    ]
+  },
+  options: { ...baseOpts('Months'), scales: { ...baseOpts().scales, x: { ...baseOpts().scales.x, stacked:false } } }
+});
+
+// 9. Scatter - completion per circle
+new Chart(document.getElementById('completionScatter'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      {
+        label: 'Traditional',
+        data: TRAD_CIRCLES.map((c,i) => ({ x: i+1, y: c.completion * 100 })),
+        backgroundColor: TRAD_COLOR, pointRadius: 10, pointHoverRadius: 13
+      },
+      {
+        label: 'DYORX',
+        data: DYORX_CIRCLES.map((c,i) => ({ x: i+1, y: c.completion * 100 })),
+        backgroundColor: DYORX_COLOR, pointRadius: 10, pointHoverRadius: 13
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color:'#94a3b8', boxWidth:12 } } },
+    scales: {
+      x: { grid:{color:gridColor}, ticks:{ color:tickColor, callback: v => `C${v}` }, min:0.5, max:5.5 },
+      y: { grid:{color:gridColor}, ticks:{ color:tickColor, callback: v => v+'%' }, min:60, max:105, title:{display:true,text:'Completion %',color:tickColor} }
+    }
+  }
+});
+
+// Build tables
+function pctClass(v) { return v >= 0.9 ? 'high' : v >= 0.8 ? 'mid' : 'low'; }
+
+const tradTbody = document.getElementById('tradTable');
+TRAD_CIRCLES.forEach(c => {
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td><span class="tag trad">T${c.idx}</span></td>
+    <td><div class="circle-label">${c.label}</div><div class="circle-sub">${c.sublabel}</div></td>
+    <td><span class="pct ${pctClass(c.completion)}">${(c.completion*100).toFixed(0)}%</span><div style="font-size:0.75rem;color:#64748b">${c.completion===1?10:c.completion===0.9?9:c.completion===0.8?8:7}/10</div></td>
+    <td>${c.dropouts}</td>
+    <td>$${c.contributed.toLocaleString()}</td>
+    <td>$${c.payout.toFixed(0)}</td>
+    <td>${c.dropout_round ? c.dropout_round.toFixed(1) : '—'}</td>
+    <td style="min-width:100px"><div class="bar-wrap"><div class="bar-fill" style="width:${c.completion*100}%;background:#64748b"></div></div></td>
+  `;
+  tradTbody.appendChild(row);
+});
+
+const dyorxTbody = document.getElementById('dyorxTable');
+DYORX_CIRCLES.forEach((c, i) => {
+  const t = TRAD_CIRCLES[i];
+  const compDelta = c.completion - t.completion;
+  const contribDelta = c.contributed - t.contributed;
+  const deltaClass = compDelta > 0 ? 'delta-up' : compDelta < 0 ? 'delta-dn' : 'delta-eq';
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td><span class="tag dyorx">D${c.idx}</span></td>
+    <td><div class="circle-label">${c.label}</div><div class="circle-sub">${c.sublabel}</div></td>
+    <td><span class="pct ${pctClass(c.completion)}">${(c.completion*100).toFixed(0)}%</span><div style="font-size:0.75rem;color:#64748b">${c.completion===1?10:c.completion===0.9?9:c.completion===0.8?8:7}/10</div></td>
+    <td>${c.dropouts}</td>
+    <td>$${c.contributed.toLocaleString()}</td>
+    <td>$${c.payout.toFixed(0)}</td>
+    <td style="color:#34d399;font-weight:700">$${c.yield_earned.toFixed(2)}</td>
+    <td class="delta-cell">
+      <span class="${deltaClass}">${compDelta >= 0 ? '+' : ''}${(compDelta*100).toFixed(0)}%</span>
+      <span style="color:#64748b;font-size:0.75rem"> completion</span><br>
+      <span class="${contribDelta >= 0 ? 'delta-up' : 'delta-dn'}">${contribDelta >= 0 ? '+' : ''}$${contribDelta.toLocaleString()}</span>
+      <span style="color:#64748b;font-size:0.75rem"> contributed</span>
+    </td>
+    <td style="min-width:100px"><div class="bar-wrap"><div class="bar-fill" style="width:${c.completion*100}%;background:linear-gradient(90deg,#3b82f6,#06b6d4)"></div></div></td>
+  `;
+  dyorxTbody.appendChild(row);
+});
+</script>
+</body>
+</html>

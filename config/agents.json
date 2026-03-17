@@ -8,7 +8,7 @@
       "income_stability": 0.9,
       "yield_sensitivity": 0.3,
       "social_pressure_sensitivity": 0.7,
-      "weight": 0.25
+      "weight": 0.15
     },
     {
       "type": "optimistic_newcomer",
@@ -18,7 +18,7 @@
       "income_stability": 0.6,
       "yield_sensitivity": 0.8,
       "social_pressure_sensitivity": 0.5,
-      "weight": 0.2
+      "weight": 0.12
     },
     {
       "type": "financially_stressed",
@@ -28,7 +28,7 @@
       "income_stability": 0.3,
       "yield_sensitivity": 0.95,
       "social_pressure_sensitivity": 0.8,
-      "weight": 0.25
+      "weight": 0.15
     },
     {
       "type": "skeptical_veteran",
@@ -38,7 +38,7 @@
       "income_stability": 0.7,
       "yield_sensitivity": 0.6,
       "social_pressure_sensitivity": 0.9,
-      "weight": 0.15
+      "weight": 0.1
     },
     {
       "type": "opportunistic_freerider",
@@ -48,7 +48,59 @@
       "income_stability": 0.5,
       "yield_sensitivity": 0.4,
       "social_pressure_sensitivity": 0.2,
-      "weight": 0.15
+      "weight": 0.08
+    },
+    {
+      "type": "group_leader",
+      "description": "The organizer who recruited everyone. Feels personally responsible if the circle fails. Highly reliable and socially invested — their reputation is on the line.",
+      "reliability": 0.95,
+      "risk_tolerance": 0.15,
+      "income_stability": 0.85,
+      "yield_sensitivity": 0.5,
+      "social_pressure_sensitivity": 0.95,
+      "weight": 0.1
+    },
+    {
+      "type": "impatient_saver",
+      "description": "Has decent income but wants their payout NOW. Reliability is fine early on but drops sharply if they haven't received their payout by round 5. Gets restless and resentful.",
+      "reliability": 0.75,
+      "risk_tolerance": 0.6,
+      "income_stability": 0.7,
+      "yield_sensitivity": 0.5,
+      "social_pressure_sensitivity": 0.4,
+      "weight": 0.1,
+      "reliability_decay_after_round": 5,
+      "reliability_late": 0.4
+    },
+    {
+      "type": "social_follower",
+      "description": "Decisions are almost entirely shaped by what others do. If everyone contributes, they contribute. If people start dropping out, they panic and follow. No strong personal conviction.",
+      "reliability": 0.65,
+      "risk_tolerance": 0.4,
+      "income_stability": 0.6,
+      "yield_sensitivity": 0.6,
+      "social_pressure_sensitivity": 0.95,
+      "weight": 0.1
+    },
+    {
+      "type": "frugal_planner",
+      "description": "Extremely disciplined with money. Low risk tolerance, very high reliability. Motivated by seeing exact numbers — yield visibility strongly influences them.",
+      "reliability": 0.92,
+      "risk_tolerance": 0.1,
+      "income_stability": 0.85,
+      "yield_sensitivity": 0.85,
+      "social_pressure_sensitivity": 0.5,
+      "weight": 0.1
+    },
+    {
+      "type": "irregular_earner",
+      "description": "Gig worker or freelancer with unpredictable income. Some months they can pay easily, others they literally can't. Motivation is high but income stability is very low.",
+      "reliability": 0.55,
+      "risk_tolerance": 0.4,
+      "income_stability": 0.2,
+      "yield_sensitivity": 0.75,
+      "social_pressure_sensitivity": 0.65,
+      "weight": 0.1
     }
   ],
   "name_pool": [

@@ -4,29 +4,27 @@
       "name": "Traditional Savings Circle",
       "description": "Classic consorcio/ROSCA with no yield. Monthly contributions, round-robin payouts.",
       "apy": 0.0,
-      "monthly_contribution_usd": 100,
-      "num_agents": 12,
-      "num_rounds": 12,
+      "monthly_contribution_usd": 200,
+      "num_agents": 10,
+      "num_rounds": 10,
       "payout_method": "round_robin",
-      "currency": "BRL",
-      "usd_to_brl": 5.2
+      "currency": "USD"
     },
     "dyorx": {
       "name": "DYORX Circle (Solana DeFi Yield)",
-      "description": "DYORX-powered circle where idle pooled funds earn yield via Kamino/MarginFi on Solana. Yield distributed proportionally to active members.",
+      "description": "DYORX-powered circle where idle pooled funds earn yield via Kamino/MarginFi on Solana. Yield distributed proportionally to contributions.",
       "apy": 0.07,
-      "monthly_contribution_usd": 100,
-      "num_agents": 12,
-      "num_rounds": 12,
+      "monthly_contribution_usd": 200,
+      "num_agents": 10,
+      "num_rounds": 10,
       "payout_method": "round_robin",
-      "currency": "BRL",
-      "usd_to_brl": 5.2,
+      "currency": "USD",
       "yield_source": "Kamino USDC vault on Solana",
-      "yield_distribution": "proportional_to_balance"
+      "yield_distribution": "proportional_to_contributions"
     }
   },
   "simulation": {
-    "runs_per_scenario": 3,
+    "runs_per_scenario": 5,
     "random_events": true,
     "random_event_probability": 0.15,
     "random_events_pool": [
@@ -37,6 +35,63 @@
       "bonus_income",
       "rent_increase",
       "holiday_spending_pressure"
+    ],
+    "circle_compositions": [
+      {
+        "circle_index": 1,
+        "label": "Best Case — reliable core + 1 freerider",
+        "description": "Mostly reliable savers with one opportunistic freerider. Represents a well-screened group with one bad apple.",
+        "composition": [
+          {"type": "reliable_saver", "count": 4},
+          {"type": "group_leader", "count": 1},
+          {"type": "frugal_planner", "count": 2},
+          {"type": "optimistic_newcomer", "count": 2},
+          {"type": "opportunistic_freerider", "count": 1}
+        ]
+      },
+      {
+        "circle_index": 2,
+        "label": "Realistic Average — mixed bag",
+        "description": "A realistic cross-section of personality types, weighted toward common archetypes.",
+        "composition": [
+          {"type": "reliable_saver", "count": 2},
+          {"type": "financially_stressed", "count": 2},
+          {"type": "optimistic_newcomer", "count": 2},
+          {"type": "skeptical_veteran", "count": 2},
+          {"type": "opportunistic_freerider", "count": 1},
+          {"type": "irregular_earner", "count": 1}
+        ]
+      },
+      {
+        "circle_index": 3,
+        "label": "Tough Circle — stressed + irregular earners",
+        "description": "High-risk composition: financially stressed members and gig workers with unpredictable income.",
+        "composition": [
+          {"type": "financially_stressed", "count": 3},
+          {"type": "irregular_earner", "count": 3},
+          {"type": "impatient_saver", "count": 2},
+          {"type": "skeptical_veteran", "count": 1},
+          {"type": "opportunistic_freerider", "count": 1}
+        ]
+      },
+      {
+        "circle_index": 4,
+        "label": "Leader-Dependent — group leader + social followers",
+        "description": "Circle cohesion depends heavily on the group leader. Social followers mirror group behavior.",
+        "composition": [
+          {"type": "group_leader", "count": 1},
+          {"type": "social_follower", "count": 4},
+          {"type": "frugal_planner", "count": 2},
+          {"type": "impatient_saver", "count": 2},
+          {"type": "financially_stressed", "count": 1}
+        ]
+      },
+      {
+        "circle_index": 5,
+        "label": "Control — random weighted distribution",
+        "description": "Agents drawn randomly from weighted personality pool. Baseline control group.",
+        "composition": "random"
+      }
     ]
   }
 }

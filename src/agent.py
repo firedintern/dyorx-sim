@@ -1,15 +1,15 @@
 """
 Agent class: Each agent is a savings circle member with a personality.
-Uses Qwen LLM to make monthly decisions: contribute, skip, or drop out.
+Uses Claude (Anthropic) to make monthly decisions: contribute, skip, or drop out.
 """
 
 import json
 import random
-from openai import OpenAI
+from anthropic import Anthropic
 
 
 class Agent:
-    def __init__(self, name: str, personality: dict, llm_client: OpenAI, model: str):
+    def __init__(self, name: str, personality: dict, llm_client: Anthropic, model: str):
         self.name = name
         self.personality = personality
         self.llm_client = llm_client
@@ -41,16 +41,16 @@ class Agent:
         prompt = self._build_prompt(circle_state)
 
         try:
-            response = self.llm_client.chat.completions.create(
+            response = self.llm_client.messages.create(
                 model=self.model,
+                system=self._system_prompt(circle_state),
                 messages=[
-                    {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
+                temperature=1.0,
                 max_tokens=300
             )
-            raw = response.choices[0].message.content.strip()
+            raw = response.content[0].text.strip()
             decision = self._parse_decision(raw)
         except Exception as e:
             # fallback to personality-based decision if LLM fails
@@ -60,17 +60,45 @@ class Agent:
         self._apply_decision(decision, circle_state)
         return decision
 
-    def _system_prompt(self) -> str:
-        return f"""You are {self.name}, a member of a savings circle (consorcio/ROSCA).
+    def _system_prompt(self, circle_state: dict = None) -> str:
+        apy = circle_state.get("apy", 0) if circle_state else 0
+
+        mechanics = """You are a member of a savings circle (also known as consórcio or ROSCA). Here is how it works:
+
+- A group of members each contribute a fixed amount every month to a shared pool.
+- Each month, one member receives the entire pot (all contributions for that round).
+- The payout order is set at the beginning and rotates so every member gets one payout by the end.
+- If you drop out, you lose your place in the rotation and may not get your payout at all.
+- If others drop out, the pot each month gets smaller, so everyone's payout is worth less.
+- The circle only works if everyone keeps contributing. Every dropout hurts the whole group."""
+
+        if apy > 0:
+            mechanics += """
+
+This circle also earns 7% APY on the pooled funds through DeFi yield (Kamino USDC vaults on Solana). This means the money sitting in the pool between payouts earns interest. You earn yield proportional to what you've contributed — skip a month and your yield share shrinks. This is free money on top of the normal circle payout that would not exist in a traditional savings circle."""
+
+        # impatient_saver: adjust effective reliability based on round
+        effective_reliability = self.personality["reliability"]
+        if (self.personality["type"] == "impatient_saver"
+                and circle_state
+                and circle_state.get("current_round", 0) > self.personality.get("reliability_decay_after_round", 5)
+                and not self.payout_received):
+            effective_reliability = self.personality.get("reliability_late", 0.4)
+
+        personality_block = f"""
+You are {self.name}.
 
 Your personality:
 → Type: {self.personality['type']}
 → Description: {self.personality['description']}
-→ Reliability: {self.personality['reliability']:.0%}
+→ Reliability: {effective_reliability:.0%}
 → Risk tolerance: {self.personality['risk_tolerance']:.0%}
 → Income stability: {self.personality['income_stability']:.0%}
 → Sensitivity to yields/earnings: {self.personality['yield_sensitivity']:.0%}
-→ Social pressure sensitivity: {self.personality['social_pressure_sensitivity']:.0%}
+→ Social pressure sensitivity: {self.personality['social_pressure_sensitivity']:.0%}"""
+
+        return f"""{mechanics}
+{personality_block}
 
 You must respond ONLY with valid JSON in this exact format:
 {{"action": "contribute" or "skip" or "dropout", "reasoning": "one sentence why"}}
@@ -78,22 +106,47 @@ You must respond ONLY with valid JSON in this exact format:
 Nothing else. No markdown, no explanation outside the JSON."""
 
     def _build_prompt(self, state: dict) -> str:
+        contribution = state["contribution_amount"]
+        total_rounds = state["total_rounds"]
+        num_agents = state["total_members"]
+        apy = state.get("apy", 0)
+
         lines = [
-            f"Round {state['current_round']} of {state['total_rounds']}.",
-            f"Monthly contribution: ${state['contribution_amount']}",
-            f"Members still active: {state['active_members']} of {state['total_members']}",
-            f"Pool balance: ${state['pool_balance']:.2f}",
+            f"Round {state['current_round']} of {total_rounds}.",
+            f"Monthly contribution: ${contribution}",
+            f"Members still active: {state['active_members']} of {num_agents}",
+            f"Pool balance this round: ${state['pool_balance']:.2f}",
             f"Your total contributed so far: ${self.total_contributed:.2f}",
             f"You have contributed {self.months_contributed} months, skipped {self.months_skipped}",
-            f"Have you received your payout yet: {'yes' if self.payout_received else 'no'}",
+            f"Have you received your payout yet: {'YES' if self.payout_received else 'NO — you are still waiting for your turn'}",
         ]
 
-        if state.get("apy", 0) > 0:
-            lines.append(f"Circle APY: {state['apy']:.1%} (from DeFi yields on Solana)")
-            lines.append(f"Your yield earned so far: ${self.yield_earned:.2f}")
+        if apy > 0:
+            # projected total yield: contribution * num_agents * apy * (total_rounds/12) / num_agents
+            # simplifies to: contribution * apy * (total_rounds / 12)
+            projected_total_yield = contribution * apy * (total_rounds / 12)
+            lines.append(
+                f"You have earned ${self.yield_earned:.2f} in passive income so far just by being in this circle. "
+                f"If you drop out, you permanently lose this income stream. "
+                f"Members who stay until the end are projected to earn ${projected_total_yield:.2f} total in yield on top of their payout."
+            )
+            # yield share visibility
+            total_pool_contributions = state.get("total_pool_contributions", 0)
+            if total_pool_contributions > 0 and self.total_contributed > 0:
+                my_share_pct = (self.total_contributed / total_pool_contributions) * 100
+                lines.append(
+                    f"Your yield share: you contributed ${self.total_contributed:.0f} out of ${total_pool_contributions:.0f} total — "
+                    f"your share is {my_share_pct:.1f}% of the yield pool. "
+                    f"Skip a month and your share shrinks."
+                )
 
         if state.get("dropout_count", 0) > 0:
-            lines.append(f"Members who dropped out: {state['dropout_count']}")
+            lines.append(
+                f"WARNING: {state['dropout_count']} member(s) have already dropped out. "
+                f"This means the monthly pot is now smaller — everyone's payout is worth less because of these dropouts."
+            )
+
+        lines.append("Remember: if you drop out, your payout slot is lost and the monthly pot shrinks for everyone else who stayed.")
 
         if self.current_event:
             lines.append(f"LIFE EVENT THIS MONTH: {self.current_event}")
@@ -103,7 +156,6 @@ Nothing else. No markdown, no explanation outside the JSON."""
 
     def _parse_decision(self, raw: str) -> dict:
         """try to parse LLM response as JSON"""
-        # strip markdown fences if present
         clean = raw.replace("```json", "").replace("```", "").strip()
         try:
             parsed = json.loads(clean)
@@ -115,7 +167,6 @@ Nothing else. No markdown, no explanation outside the JSON."""
                 "reasoning": parsed.get("reasoning", "no reason given")
             }
         except (json.JSONDecodeError, AttributeError):
-            # if LLM returned garbage, check for keywords
             lower = raw.lower()
             if "dropout" in lower or "drop out" in lower or "quit" in lower:
                 return {"action": "dropout", "reasoning": raw[:100]}
@@ -127,8 +178,12 @@ Nothing else. No markdown, no explanation outside the JSON."""
         """personality-based fallback when LLM is unavailable"""
         roll = random.random()
 
-        # adjust threshold based on personality
+        # impatient_saver: decay reliability after round threshold if no payout yet
         contribute_threshold = self.personality["reliability"]
+        if (self.personality["type"] == "impatient_saver"
+                and state.get("current_round", 0) > self.personality.get("reliability_decay_after_round", 5)
+                and not self.payout_received):
+            contribute_threshold = self.personality.get("reliability_late", 0.4)
 
         # life events lower reliability
         if self.current_event and self.current_event in [

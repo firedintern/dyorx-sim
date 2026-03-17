@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from openai import OpenAI
+from anthropic import Anthropic
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -23,26 +23,21 @@ def main():
     load_dotenv()
 
     # validate env
-    api_key = os.getenv("LLM_API_KEY")
-    base_url = os.getenv("LLM_BASE_URL")
-    model = os.getenv("LLM_MODEL_NAME", "qwen-plus")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    model = os.getenv("LLM_MODEL_NAME", "claude-haiku-4-5-20251001")
 
     if not api_key:
-        console.print("[red]ERROR: LLM_API_KEY not set in .env[/red]")
-        console.print("Copy .env.example to .env and add your Qwen API key")
+        console.print("[red]ERROR: ANTHROPIC_API_KEY not set in .env[/red]")
+        console.print("Copy .env.example to .env and add your Anthropic API key")
         sys.exit(1)
 
-    if not base_url:
-        console.print("[red]ERROR: LLM_BASE_URL not set in .env[/red]")
-        sys.exit(1)
-
-    # init LLM client (OpenAI-compatible)
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    # init Anthropic client
+    client = Anthropic(api_key=api_key)
 
     console.print(Panel(
         "[bold]DYORX Savings Circle Simulator[/bold]\n"
-        f"LLM: {model} via {base_url}\n"
-        "Comparing: Traditional (0% APY) vs DYORX (7% APY)",
+        f"LLM: {model} (Anthropic)\n"
+        "Comparing: Traditional (0% APY) vs DYORX (7% gross APY, 85% to members)",
         title="dyorx-sim",
         border_style="cyan"
     ))
@@ -52,13 +47,13 @@ def main():
     if not Path(config_dir).exists():
         config_dir = Path(__file__).parent.parent / "config"
 
-    def on_round(scenario_name, run_idx, round_data):
+    def on_round(scenario_name, run_idx, composition_label, round_data):
         active = round_data["active_count"]
         rd = round_data["round"]
         contribs = round_data["contributions"]
         drops = round_data["dropouts"]
         console.print(
-            f"  [dim]{scenario_name}[/dim] run {run_idx} | "
+            f"  [dim]{scenario_name}[/dim] circle {run_idx} [{composition_label}] | "
             f"round {rd:2d} | "
             f"active: {active:2d} | "
             f"contributed: {contribs:2d} | "

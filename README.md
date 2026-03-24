@@ -2,7 +2,7 @@
 
 Multi-agent AI simulation to validate the DYORX thesis: adding DeFi yields (6-8% APY via Solana protocols like Kamino/MarginFi) to traditional savings circles (consórcios/ROSCAs) improves completion rates, reduces dropouts, and increases total savings.
 
-Each agent represents a circle member with its own financial personality, risk tolerance, and decision-making powered by Qwen LLM. The sim runs two scenarios side by side:
+Each agent represents a circle member with its own financial personality, risk tolerance, and decision-making powered by Claude (Anthropic). The sim runs two scenarios side by side:
 
 → **Traditional circle**: 0% yield, members contribute monthly, one member gets the pot each round
 → **DYORX circle**: 6-8% APY on pooled funds, same structure but idle funds earn yield via DeFi
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 # configure
 cp .env.example .env
-# edit .env with your Qwen API key
+# edit .env with your Anthropic API key
 
 # run
 python src/main.py
@@ -36,7 +36,7 @@ python src/main.py
 ## Prerequisites
 
 → Python 3.11+
-→ Qwen API key from [Alibaba DashScope](https://bailian.console.aliyun.com/) (cheapest option, ~$0.01/1k tokens)
+→ Anthropic API key from [console.anthropic.com](https://console.anthropic.com/)
 → A terminal
 
 ## Configuration
@@ -44,9 +44,10 @@ python src/main.py
 ### .env
 
 ```
-LLM_API_KEY=your_qwen_api_key
-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL_NAME=qwen-plus
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+LLM_MODEL_NAME=claude-haiku-4-5-20251001  # fastest & cheapest (default)
+# LLM_MODEL_NAME=claude-sonnet-4-6        # smarter, more expensive
+# LLM_MODEL_NAME=claude-opus-4-6          # most capable
 ```
 
 ### config/scenarios.json
@@ -60,7 +61,7 @@ Agent personality templates. Each agent gets randomly assigned traits that affec
 ## How it works
 
 1. **Setup**: Creates a savings circle with N agents, each with a unique personality profile
-2. **Each round** (= 1 month): Every agent uses Qwen to decide whether to contribute, skip, or drop out based on their personality + circle state
+2. **Each round** (= 1 month): Every agent uses Claude to decide whether to contribute, skip, or drop out based on their personality + circle state
 3. **Payout**: One member receives the pot each round (round-robin or bid-based)
 4. **Yield**: In DYORX mode, idle pooled funds earn APY which gets distributed
 5. **Report**: After all rounds, compare traditional vs DYORX on completion rate, total saved, dropout timing, member satisfaction
@@ -111,7 +112,7 @@ dyorx-sim/
 
 ## Cost estimate
 
-A typical run (12 agents, 12 rounds, 2 scenarios) makes ~288 LLM calls. With Qwen-Plus at ~$0.01/1k tokens, expect $0.50-2.00 per full simulation.
+A typical run (12 agents, 12 rounds, 2 scenarios) makes ~288 LLM calls. With Claude Haiku 4.5 (recommended), expect $0.50-2.00 per full simulation.
 
 ## License
 
